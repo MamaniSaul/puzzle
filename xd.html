@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resolver Puzzle 3x3</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <style>
+        #puzzle {
+            display: grid;
+            grid-template-columns: repeat(3, 100px);
+            grid-template-rows: repeat(3, 100px);
+            gap: 5px;
+            justify-content: center;
+        }
+        .tile {
+            width: 100px;
+            height: 100px;
+            font-size: 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #f0f0f0;
+            border: 1px solid #ccc;
+            cursor: pointer;
+        }
+        .empty {
+            background-color: #fff;
+            cursor: default;
+        }
+    </style>
+</head>
+<body class="bg-light">
+
+<div class="container mt-5">
+    <h2 class="text-center mb-4">Resolver Puzzle 3x3</h2>
+    <div id="puzzle" class="mx-auto mb-3"></div>
+    <div class="text-center">
+        <button class="btn btn-primary" onclick="solvePuzzleStepByStep()">Resolver paso a paso</button>
+    </div>
+</div>
+
+<script>
+    const GOAL_STATE = [
+        [1, 2, 3],
+        [4, 5, 6],
+        [7, 8, 0]
+    ];
+
+    let puzzleState = [
+        [0, 3, 2],
+        [1, 5, 6],
+        [7, 4, 8]
+    ];
+
+    function drawPuzzle() {
+        const puzzleDiv = document.getElementById('puzzle');
+        puzzleDiv.innerHTML = '';
+        puzzleState.forEach(row => {
+            row.forEach(tile => {
+                const tileDiv = document.createElement('div');
+                tileDiv.className = 'tile' + (tile === 0 ? ' empty' : '');
+                tileDiv.textContent = tile === 0 ? '' : tile;
+                tileDiv.onclick = () => moveTile(tile);
+                puzzleDiv.appendChild(tileDiv);
+            });
+        });
+    }
+
+    function moveTile(tile) {
+        const [emptyX, emptyY] = findTile(0);
+        const [tileX, tileY] = findTile(tile);
+
+        if ((Math.abs(emptyX - tileX) + Math.abs(emptyY - tileY)) === 1) {
+            puzzleState[emptyX][emptyY] = tile;
+            puzzleState[tileX][tileY] = 0;
+            drawPuzzle();
+            if (goalTest()) {
+                alert('¡Felicidades! Has resuelto el puzzle.');
+            }
+        }
+    }
+
+    function findTile(tile) {
+        for (let i = 0; i < 3; i++) {
+            for (let j = 0; j < 3; j++) {
+                if (puzzleState[i][j] === tile) {
+                    return [i, j];
+                }
+            }
+        }
+    }
+
+    function goalTest(state = puzzleState) {
+        return state.flat().toString() === GOAL_STATE.flat().toString();
+    }
+
+    function cloneState(state) {
+        return state.map(row => row.slice());
+    }
+
+    function getNeighbors(state) {
+        const [x, y] = findTileInState(state, 0);
+        const neighbors = [];
+
+        const moves = [
+            [x - 1, y], // Arriba
+            [x + 1, y], // Abajo
+            [x, y - 1], // Izquierda
+            [x, y + 1]  // Derecha
+        ];
+
+        for (const [newX, newY] of moves) {
+            if (newX >= 0 && newX < 3 && newY >= 0 && newY < 3) {
+                const newState = cloneState(state);
+                newState[x][y] = newState[newX][newY];
+                newState[newX][newY] = 0;
+                neighbors.push(newState);
+            }
+        }
+        return neighbors;
+    }
+
+    function findTileInState(state, tile) {
+        for (let i = 0; i < 3; i++) {
+            for (let j = 0; j < 3; j++) {
+                if (state[i][j] === tile) {
+                    return [i, j];
+                }
+            }
+        }
+    }
+
+    function manhattanDistance(state) {
+        let distance = 0;
+        for (let i = 0; i < 3; i++) {
+            for (let j = 0; j < 3; j++) {
+                const tile = state[i][j];
+                if (tile !== 0) {
+                    const goalX = Math.floor((tile - 1) / 3);
+                    const goalY = (tile - 1) % 3;
+                    distance += Math.abs(i - goalX) + Math.abs(j - goalY);
+                }
+            }
+        }
+        return distance;
+    }
+
+    function solvePuzzleStepByStep() {
+        const queue = [{ state: cloneState(puzzleState), path: [], cost: 0 }];
+        const visited = new Set();
+
+        function processNextStep() {
+            if (queue.length === 0) {
+                alert('No se pudo resolver el puzzle.');
+                return;
+            }
+
+            queue.sort((a, b) => (a.cost + manhattanDistance(a.state)) - (b.cost + manhattanDistance(b.state)));
+            const { state, path, cost } = queue.shift();
+
+            if (goalTest(state)) {
+                (function executePath(i) {
+                    if (i < path.length) {
+                        moveTile(path[i]);
+                        setTimeout(() => executePath(i + 1), 100); // Reduce el tiempo de espera a 100ms entre movimientos
+                    } else {
+                        alert('Puzzle resuelto automáticamente.');
+                    }
+                })(0);
+                return;
+            }
+
+            const stateKey = JSON.stringify(state);
+            if (!visited.has(stateKey)) {
+                visited.add(stateKey);
+
+                const neighbors = getNeighbors(state);
+                for (const neighbor of neighbors) {
+                    const move = findMovedTile(state, neighbor);
+                    if (!isReversedMove(path, move)) { // Evita movimientos que revierten el anterior
+                        queue.push({ state: neighbor, path: [...path, move], cost: cost + 1 });
+                    }
+                }
+            }
+
+            setTimeout(processNextStep, 0); // Procesa el siguiente paso sin espera
+        }
+
+        processNextStep();
+    }
+
+    function findMovedTile(oldState, newState) {
+        for (let i = 0; i < 3; i++) {
+            for (let j = 0; j < 3; j++) {
+                if (oldState[i][j] !== newState[i][j] && newState[i][j] !== 0) {
+                    return newState[i][j];
+                }
+            }
+        }
+    }
+
+    function isReversedMove(path, move) {
+        if (path.length === 0) return false;
+        const lastMove = path[path.length - 1];
+        return move === lastMove;
+    }
+
+    drawPuzzle();
+</script>
+
+
+
+</body>
+</html>
